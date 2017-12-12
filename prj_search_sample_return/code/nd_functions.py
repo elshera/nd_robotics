@@ -358,16 +358,35 @@ def create_output_images(Rover):
 #========================================================================================
 def decision_step(Rover):
   # go towards the rock and pick it up
-  if Rover.samples_available == 1:
-      Rover.steer = np.mean(Rover.samples_angle * 180/np.pi)        
-      if Rover.near_sample and Rover.vel == 0 and not Rover.picking_up:      
-          Rover.send_pickup = True
-      elif Rover.near_sample:     
-          Rover.brake      = 100
+  print('#####\n Rover is in :'+str(Rover.mode)+'\n')
+  if Rover.mode == 'detected':
+    Rover.trottle = 0
+    Rover.brake   = 10
+    Rover.steer = np.mean(Rover.samples_angle * 180/np.pi)
+    if Rover.vel == 0:
+      Rover.mode = 'has_stopped'
+  elif Rover.mode == 'has_stopped':
+      Rover.steer = np.mean(Rover.samples_angle * 180/np.pi)
+      Rover.brake = 0
+      Rover.trottle = 0.2
+      Rover.max_vel = 1
+      if Rover.near_sample:     
+          Rover.brake      = 10
           Rover.trottle    = 0 
-      elif Rover.samples_distance < 0.1:
-          Rover.brake      = 50
-          Rover.trottle    = 0
+          Rover.mode = 'close'
+  elif Rover.mode == 'close':
+    if Rover.near_sample and Rover.vel == 0 and not Rover.picking_up:      
+        Rover.send_pickup = True
+    else:
+      Rover.brake = 0
+      Rover.trottle = -2
+      Rover.max_vel = 1
+      if np.minarg(Rover.nav_dists) >= 100:
+        Rover.mode = 'stop'
+      
+  elif Rover.samples_available == 1:
+    Rover.mode = 'detected'
+    Rover.steer = np.mean(Rover.samples_angle * 180/np.pi)
       
   #Rover.mode = 'stop'
   # Check if we have vision data to make decisions with
@@ -380,7 +399,7 @@ def decision_step(Rover):
               # and velocity is below max, then throttle 
               if Rover.vel < Rover.max_vel:
                   # Set throttle value to throttle setting
-                  Rover.throttle = Rover.throttle_set
+                  Rover.throttle = 0.2
               else: # Else coast
                   Rover.throttle = 0
               Rover.brake = 0
@@ -471,11 +490,11 @@ def update_rover(Rover, data):
       # Update number of rocks collected
       Rover.samples_collected = Rover.samples_to_find - np.int(data["sample_count"])
 
-      print('speed =',Rover.vel, 'position =', Rover.pos, 'throttle =', 
-      Rover.throttle, 'steer_angle =', Rover.steer, 'near_sample:', Rover.near_sample, 
-      'picking_up:', data["picking_up"], 'sending pickup:', Rover.send_pickup, 
-      'total time:', Rover.total_time, 'samples remaining:', data["sample_count"], 
-      'samples collected:', Rover.samples_collected)
+      #print('speed =',Rover.vel, 'position =', Rover.pos, 'throttle =', 
+      #Rover.throttle, 'steer_angle =', Rover.steer, 'near_sample:', Rover.near_sample, 
+      #'picking_up:', data["picking_up"], 'sending pickup:', Rover.send_pickup, 
+      #'total time:', Rover.total_time, 'samples remaining:', data["sample_count"], 
+      #'samples collected:', Rover.samples_collected)
       
       # Get the current image from the center camera of the rover
       imgString = data["image"]
