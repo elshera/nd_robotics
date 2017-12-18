@@ -1,5 +1,5 @@
 import numpy as np
-
+import time
 #========================================================================================
 # Define RoverState() class to retain rover state parameters
 #========================================================================================
@@ -8,6 +8,7 @@ class RoverState():
         # navigation time
         self.start_time         = None        # To record the start time of navigation
         self.total_time         = None        # To record total duration of naviagation
+        self.start_coords       = None        # starting coordinates of the rover
 
         # map of the area to be explored
         self.ground_truth       = gtruth      # Ground truth worldmap
@@ -31,11 +32,11 @@ class RoverState():
         
         # controlling parameters
         self.mode               = 'forward'   # Current mode (can be forward or stop)
-        self.throttle_set       = 0.2         # Throttle setting when accelerating
-        self.brake_set          = 10          # Brake setting when braking
+        self.throttle_set       = 0.3         # Throttle setting when accelerating
+        self.brake_set          = 20          # Brake setting when braking
         self.stop_forward       = 50          # Threshold to initiate stopping, The stop_forward and go_forward fields below represent total count of navigable terrain pixels.
-        self.go_forward         = 500         # Threshold to go forward again
-        self.max_vel            = 10          # Maximum velocity (meters/second)
+        self.go_forward         = 100         # Threshold to go forward again
+        self.max_vel            = 2           # Maximum velocity (meters/second)
         
 
         self.vision_image       = np.zeros((160, 320, 3), dtype=np.float) # Image output from perception step. Update this image to display your intermediate analysis steps on screen in autonomous mode
@@ -51,6 +52,62 @@ class RoverState():
         
         self.picking_up         = 0           # Will be set to telemetry value data["picking_up"]
         self.send_pickup        = False       # Set to True to trigger rock pickup
+        self.stuck_time         = time.time()
+        self.max_stuck_time     = 4           # max stuck time in seconds
+
+    # Methods
+    def getNavigationAngle(self):
+        return np.clip(np.mean(self.nav_angles * 180/np.pi), -15, 15)
+
+    def getNavigationDistance(self):
+        return np.min(self.nav_dists)
+
+    def getRockAngle(self):
+        if self.samples_angle is not None:
+            return np.mean(self.samples_angle * 180/np.pi)
+        else:
+            return 0
+
+    def getMode(self):
+        return self.mode
+
+    def setMode(self, mode):
+        self.mode = mode
+
+    def getRockDistance(self):
+        if self.samples_distance is not None:
+            return np.min(self.samples_distance)
+        else:
+            return 0.0
+
+    def moveForward(self):
+        # Set throttle back to stored value
+        self.throttle = self.throttle_set
+        # Release the brake
+        self.brake = 0
+        # Set steer to mean angle
+        self.steer = self.getNavigationAngle()
+        # set rover mode
+        #self.setMode('forward')
+
+
+    def goToRock(self):
+        # Set throttle back to stored value
+        self.throttle = self.throttle_set
+        # Release the brake
+        self.brake = 0
+        # Set steer to mean angle
+        self.steer = self.getRockAngle()
+
+
+    def stop(self):
+        # stop accelerating
+        self.throttle = 0
+        # set brakes on
+        self.brake = self.brake_set
+        # set angle
+        self.steer = 0
+
 
 
 #========================================================================================
@@ -66,7 +123,7 @@ class Databucket():
         df['X_Position']  = df['X_Position'].replace('%','',regex=True).astype('float')/100
         df['Y_Position']  = df['Y_Position'].replace('%','',regex=True).astype('float')/100
         df['Yaw']         = df['Yaw'].replace('%','',regex=True).astype('float')/100
-        self.images       = df["Path"].tolist()
+        self.images        = df["Path"].tolist()
         self.xpos         = df["X_Position"].values
         self.ypos         = df["Y_Position"].values
         self.yaw          = df["Yaw"].values
